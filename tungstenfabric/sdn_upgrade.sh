@@ -64,7 +64,7 @@ else
   find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi
 fi
 ifdown vhost0
-rm -f /etc/sysconfig/network-scripts/*vhost*
+#rm -f /etc/sysconfig/network-scripts/*vhost*
 rm -f /etc/sysconfig/network-scripts/*vrouter*
 
 echo "Starting new SDN container ..."
