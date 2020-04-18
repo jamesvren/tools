@@ -35,17 +35,20 @@ do
   echo -e "\nInfo: Login to $node ... do"
   ssh $node << REMOTESSH
 image=\$(docker ps --format={{.Image}} | grep contrail | sed -n '1p')
+# 10.130.176.11:6666/contrail-vrouter-agent:james
+# 10.192.13.66/dev/contrail-vrouter-agent:james
+
 OLD_IFS="\$IFS"
-IFS=":" imageArray=(\${image})
-IFS="/" regArray=(\${imageArray[0]})
+IFS="/" imageArray=(\${image})
+len=\${#imageArray[@]}
+IFS=":" tagArray=(\${imageArray[\$len-1]})
 IFS="\$OLD_IFS"
 
-oldVersion=\${imageArray[1]}
-oldRegistry=\${regArray[0]}
-len=\${#regArray[@]}
+oldVersion=\${tagArray[1]}
+oldRegistry=\${imageArray[0]}
 for ((i=1;i<len-1;i++))
 {
-  oldRegistry="\${oldRegistry}/\${regArray[i]}"
+  oldRegistry="\${oldRegistry}/\${imageArray[i]}"
 }
 
 if [[ "x${newRegistry}" == "x" ]]; then
@@ -63,9 +66,9 @@ if [[ "x${deleteImage}" == "x" ]]; then
 else
   find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi
 fi
-ifdown vhost0
+#ifdown vhost0
 #rm -f /etc/sysconfig/network-scripts/*vhost*
-rm -f /etc/sysconfig/network-scripts/*vrouter*
+#rm -f /etc/sysconfig/network-scripts/*vrouter*
 
 echo "Starting new SDN container ..."
 find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} up -d
