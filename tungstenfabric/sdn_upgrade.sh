@@ -66,7 +66,7 @@ echo "Deleting container ..."
 if [[ "x${deleteImage}" == "x" ]]; then
   find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down
 else
-  find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi
+  find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi all
 fi
 #ifdown vhost0
 #rm -f /etc/sysconfig/network-scripts/*vhost*
