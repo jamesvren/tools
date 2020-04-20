@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 while getopts ":h:r:v:d" opt; do
     case $opt in
@@ -18,6 +19,7 @@ shift $((OPTIND-1))
 if [[ -z $newVersion ]]; then
   echo "Usage: $0 [-h node1,node2,...] [-r <reigstry>] -v <tag> [-d]"
   echo "  -h: host name, default current node if not set"
+  echo "  -r: like as 10.130.176.11:6666 or 10.192.13.66/dev"
   echo "  -d: delete image"
   exit 1
 fi
@@ -33,7 +35,7 @@ IFS="$OLD_IFS"
 for node in ${nodeArray[*]}
 do
   echo -e "\nInfo: Login to $node ... do"
-  ssh $node << REMOTESSH
+  ssh root@$node << REMOTESSH
 image=\$(docker ps --format={{.Image}} | grep contrail | sed -n '1p')
 # 10.130.176.11:6666/contrail-vrouter-agent:james
 # 10.192.13.66/dev/contrail-vrouter-agent:james
@@ -57,7 +59,7 @@ else
   newRegistry=${newRegistry}
 fi
 
-echo "Replace \${oldRegistry}:\${oldVersion} with \${newRegistry}:${newVersion} ..."
+echo "Replace \${oldRegistry}/<containers>:\${oldVersion} with \${newRegistry}/<containers>:${newVersion} ..."
 find /etc/contrail/ -name docker-compose.yaml | xargs -i sed -i -e "s%\${oldRegistry}%\${newRegistry}%g" -e "s%\${oldVersion}%${newVersion}%g" {}
 
 echo "Deleting container ..."
