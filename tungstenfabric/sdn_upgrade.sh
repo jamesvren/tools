@@ -38,10 +38,9 @@ OLD_IFS="$IFS"
 IFS="," nodeArray=(${nodes})
 IFS="$OLD_IFS"
 
-if [[ "x${password}" == "x" ]]; then
-  ssh_cmd="ssh"
-else
-  ssh_cmd="sshpass -p ${password} ssh"
+ssh_cmd="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+if [[ "x${password}" != "x" ]]; then
+  ssh_cmd="sshpass -p ${password} $ssh_cmd"
 fi
 
 # display the info to let user to confirm
@@ -51,11 +50,13 @@ do
   image=$($ssh_cmd root@$node "docker ps --format={{.Image}} | grep contrail | sed -n '1p'")
   echo $image
 done
+echo ""
 read -p "### Your input [Registry:${newRegistry}, Tag:${newVersion}], confirm(y/n)?" confirmed
 if [[ $confirmed != "y" ]]; then
   exit
 fi
 
+# ssh to each node and upgrade the containers
 for node in ${nodeArray[*]}
 do
   echo -e "\nInfo: Login to $node ... do"
