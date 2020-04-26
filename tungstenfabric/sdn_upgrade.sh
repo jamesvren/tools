@@ -44,6 +44,18 @@ else
   ssh_cmd="sshpass -p ${password} ssh"
 fi
 
+# display the info to let user to confirm
+for node in ${nodeArray[*]}
+do
+  echo "### Container information in node: ${node}"
+  image=$($ssh_cmd root@$node "docker ps --format={{.Image}} | grep contrail | sed -n '1p'")
+  echo $image
+done
+read -p "### Your input [Registry:${newRegistry}, Tag:${newVersion}], confirm(y/n)?" confirmed
+if [[ $confirmed != "y" ]]; then
+  exit
+fi
+
 for node in ${nodeArray[*]}
 do
   echo -e "\nInfo: Login to $node ... do"
