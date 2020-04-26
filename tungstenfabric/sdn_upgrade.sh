@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-while getopts ":h:r:v:d" opt; do
+while getopts ":h:r:v:p:dk" opt; do
     case $opt in
       h) nodes=$OPTARG
          ;;
@@ -9,7 +9,11 @@ while getopts ":h:r:v:d" opt; do
          ;;
       v) newVersion=$OPTARG
          ;;
+      p) password=$OPTARG
+         ;;
       d) deleteImage=1
+         ;;
+      k) upgradeKernel=1
          ;;
       \?) echo "Invalid option: $opt"; exit 1;;
     esac
@@ -17,10 +21,12 @@ done
 shift $((OPTIND-1))
 
 if [[ -z $newVersion ]]; then
-  echo "Usage: $0 [-h node1,node2,...] [-r <reigstry>] -v <tag> [-d]"
+  echo "Usage: $0 [-h <node1,node2,...> ] [ -p <password> ] [ -d ] [-k ] [-r <reigstry>] -v <tag>"
   echo "  -h: host name, default current node if not set"
+  echo "  -p: password for all hosts, prompt input if not set"
   echo "  -r: like as 10.130.176.11:6666 or 10.192.13.66/dev"
   echo "  -d: delete image"
+  echo "  -k: update kernel by ifdown vhost0"
   exit 1
 fi
 
@@ -32,10 +38,16 @@ OLD_IFS="$IFS"
 IFS="," nodeArray=(${nodes})
 IFS="$OLD_IFS"
 
+if [[ "x${password}" == "x" ]]; then
+  ssh_cmd="ssh"
+else
+  ssh_cmd="sshpass -p ${password} ssh"
+fi
+
 for node in ${nodeArray[*]}
 do
   echo -e "\nInfo: Login to $node ... do"
-  ssh root@$node << REMOTESSH
+  $ssh_cmd root@$node << REMOTESSH
 image=\$(docker ps --format={{.Image}} | grep contrail | sed -n '1p')
 # 10.130.176.11:6666/contrail-vrouter-agent:james
 # 10.192.13.66/dev/contrail-vrouter-agent:james
@@ -70,9 +82,11 @@ else
   docker rmi \$(docker images -qf label=version=\${oldVersion})
   #find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi all
 fi
-#ifdown vhost0
-#rm -f /etc/sysconfig/network-scripts/*vhost*
-#rm -f /etc/sysconfig/network-scripts/*vrouter*
+if [["x${upgradeKernel}" != "x" ]]; then
+  ifdown vhost0
+  rm -f /etc/sysconfig/network-scripts/*vhost*
+  rm -f /etc/sysconfig/network-scripts/*vrouter*
+fi
 
 echo "Starting new SDN container ..."
 find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} up -d
@@ -83,5 +97,5 @@ done
 for node in ${nodeArray[*]}
 do
   echo "========Upgrade Done. Check Services Status for $node========"
-  ssh $node "contrail-status"
+  $ssh_cmd $node "contrail-status"
 done
