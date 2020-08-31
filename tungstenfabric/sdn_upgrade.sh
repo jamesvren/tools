@@ -59,7 +59,7 @@ fi
 # ssh to each node and upgrade the containers
 for node in ${nodeArray[*]}
 do
-  echo -e "\nInfo: Login to $node ... do"
+  echo -e "\n****** Login to $node ... do ******"
   $ssh_cmd root@$node << REMOTESSH
 image=\$(docker ps --format={{.Image}} | grep contrail | sed -n '1p')
 # 10.130.176.11:6666/contrail-vrouter-agent:james
@@ -82,12 +82,14 @@ if [[ "x${newRegistry}" == "x" ]]; then
   newRegistry=\${oldRegistry}
 else
   newRegistry=${newRegistry}
+  echo '{"insecure-registries": ["${newRegistry}"]}' > /etc/docker/daemon.json
+  systemctl reload docker
 fi
 
-echo "Replace \${oldRegistry}/<containers>:\${oldVersion} with \${newRegistry}/<containers>:${newVersion} ..."
+echo "  Replace \${oldRegistry}/<containers>:\${oldVersion} with \${newRegistry}/<containers>:${newVersion} ..."
 find /etc/contrail/ -name docker-compose.yaml | xargs -i sed -i -e "s%\${oldRegistry}%\${newRegistry}%g" -e "s%\${oldVersion}%${newVersion}%g" {}
 
-echo "Deleting container ..."
+echo "  Deleting container ..."
 if [[ "x${deleteImage}" == "x" ]]; then
   find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down
 else
@@ -95,18 +97,19 @@ else
   docker rmi \$(docker images -qf label=version=\${oldVersion})
   #find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} down --rmi all
 fi
-if [["x${upgradeKernel}" != "x" ]]; then
-  ifdown vhost0
+if [[ "x${upgradeKernel}" != "x" ]]; then
+  ifdown vhost0 || true
   rm -f /etc/sysconfig/network-scripts/*vhost*
   rm -f /etc/sysconfig/network-scripts/*vrouter*
 fi
 
-echo "Starting new SDN container ..."
+echo "  Starting new SDN container ..."
 find /etc/contrail/ -name docker-compose.yaml | xargs -i docker-compose -f {} up -d
 exit
 REMOTESSH
 done
 
+echo -e "\n"
 for node in ${nodeArray[*]}
 do
   echo "========Upgrade Done. Check Services Status for $node========"
