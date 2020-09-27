@@ -1,8 +1,10 @@
 #!/bin/bash
 set -e
 
-while getopts ":h:r:v:p:dk" opt; do
+while getopts ":c:h:r:v:p:dk" opt; do
     case $opt in
+      c) container=$OPTARG
+         ;;
       h) nodes=$OPTARG
          ;;
       r) newRegistry=$OPTARG
@@ -27,6 +29,7 @@ if [[ -z $newVersion ]]; then
   echo "  -r: like as 10.130.176.11:6666 or 10.192.13.66/dev"
   echo "  -d: delete image"
   echo "  -k: update kernel by ifdown vhost0"
+  echo "  -c: container to get information from"
   exit 1
 fi
 
@@ -43,13 +46,22 @@ if [[ "x${password}" != "x" ]]; then
   ssh_cmd="sshpass -p ${password} $ssh_cmd"
 fi
 
+image_cmd="docker ps --format={{.Image}} -f name=${container} | grep contrail | sed -n '1p'"
+
 # display the info to let user to confirm
 for node in ${nodeArray[*]}
 do
   echo "### Container information in node: ${node}"
-  image=$($ssh_cmd root@$node "docker ps --format={{.Image}} | grep contrail | sed -n '1p'")
+  image=$($ssh_cmd root@$node $image_cmd)
+  if [[ "x${image}" == "x" ]]; then
+    echo "Error: no container found, please check again"
+    err=1
+  fi
   echo $image
 done
+if [[ "x${err}" != "x" ]]; then
+  exit
+fi
 echo ""
 read -p "### Your input [Registry:${newRegistry}, Tag:${newVersion}], confirm(y/n)?" confirmed
 if [[ $confirmed != "y" ]]; then
@@ -61,9 +73,14 @@ for node in ${nodeArray[*]}
 do
   echo -e "\n****** Login to $node ... do ******"
   $ssh_cmd root@$node << REMOTESSH
-image=\$(docker ps --format={{.Image}} | grep contrail | sed -n '1p')
+image=\$(${image_cmd})
 # 10.130.176.11:6666/contrail-vrouter-agent:james
 # 10.192.13.66/dev/contrail-vrouter-agent:james
+
+if [[ "x\${image}" == "x" ]]; then
+  echo "Error: container not found to get information ..."
+  exit 0
+fi
 
 OLD_IFS="\$IFS"
 IFS="/" imageArray=(\${image})

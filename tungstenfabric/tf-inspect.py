@@ -139,7 +139,7 @@ class Introspect:
                 trace = element.text.split()
                 trace[0] = datetime.fromtimestamp(float(trace[0]) / 1e6).strftime('%Y-%m-%d [%H:%M:%S].%f')
                 element.text = ' '.join(trace)
-                print Introspect.elementToStr('', element).rstrip()
+                print Introspect.elementToStr('\n', element).rstrip()
 
     @staticmethod
     def dumpTbl(items, max_width, columns):
