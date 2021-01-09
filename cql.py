@@ -112,6 +112,7 @@ def main():
     parser.add_argument('--cql', help='Cassandra Query String')
     parser.add_argument('--keyspaces', action='store_true', help='List Cassandra keyspaces')
     parser.add_argument('--tables', action='store_true', help='List All Cassandra keyspaces and tables')
+    parser.add_argument('-c', '--continues', action='store_true', help='Display all result without prompt')
 
     args = parser.parse_args()
 
@@ -152,7 +153,8 @@ def main():
                     print(num, row)
                 if not page:
                     break
-                input('----more----')
+                if not args.continues:
+                    input('----more----')
                 rows, tm, page = q.query_next()
                 tm_total += tm
         except KeyboardInterrupt as e:
