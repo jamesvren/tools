@@ -1,0 +1,14 @@
+<html>
+<head>
+    <title>
+        {% if page_title %}
+            {{ page_title }}
+        {% endif %}
+        {% block js %}{% endblock %}
+        {% block css %}{% endblock %}
+    </title>
+</head>
+
+<body>
+    {% block body %}{% endblock %}
+

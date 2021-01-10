@@ -1,0 +1,21 @@
+{% extends "main.html" %}
+
+{% block css %}
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
+{% endblock %}
+
+{% block body %}
+    <p>Cassandra</p>
+    <form action="{{ url_for('db') }}" method="post">
+	<p>IP: <input type="text" name="ip" /></p>
+	<p>Port: <input type="text" value="9042" name="port" /></p>
+	<p>User: <input type="text" value="sdn" name="user" /></p>
+	<p>Password: <input type="text" value="sdncassandra" name="password" /></p>
+
+	<p><input type="checkbox" value="enabled" name="ssh" />SSH</p>
+	<p>IP: <input type="text" name="ssh_ip" /></p>
+	<p>User: <input type="text" value="root" name="ssh_user" /></p>
+	<p>Password: <input type="text" value="cloudadmin" name="ssh_password" /></p>
+	<input type="submit" value="Connect" />
+    </form>
+{% endblock %}

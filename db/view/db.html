@@ -1,0 +1,39 @@
+{% extends "main.html" %}
+
+{% block js %}
+    <script src="{{ url_for('static', filename='db.js') }}"></script>
+{% endblock %}
+{% block css %}
+    <link rel="stylesheet" type="text/css" href="/static/style.css">
+{% endblock %}
+
+{% block body %}
+    <div id="keyspaces">
+        <h1>Keyspaces</h1>
+        <ul>
+            {% for keyspace in keyspaces %}
+                <li>{{ keyspace }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div id="tables">
+        <h1>Tables</h1>
+        <ul>
+            {% for table in tables %}
+                <li>{{ table }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    <div id="context">
+    	<div id="cql">Query(CQL): <input type="text" name="cql"></div>
+        <div id="data">
+            <p>{{ rows |length }} Rows - time: {{ query_time }}s</p>
+            <ul>
+                {% for row in rows %}
+                    <li>{{ row }}</li>
+                {% endfor %}             
+            </ul>
+    	</div>
+    </div>
+    <div id="footer"></div>
+{% endblock %}

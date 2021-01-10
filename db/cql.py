@@ -3,30 +3,46 @@ import sshtunnel
 import time
 import argparse
 
-from cassandra import ConsistencyLevel
+from cassandra import ConsistencyLevel, DriverException
 from cassandra.cluster import Cluster, BatchStatement
-from cassandra.query import SimpleStatement
+from cassandra.query import SimpleStatement, dict_factory
 from cassandra.auth import PlainTextAuthProvider
+
+trace = False
+def DEBUG(*msg):
+    if trace:
+        print(*msg)
 
 class CassandraClient():
     def __init__(self, cluster_ips, port=9042, user=None, password=None):
+        DEBUG('Create Cluster:', cluster_ips, port, user, password)
         self.user = user
         self.password = password
         self.port = port
+        self.ips = cluster_ips
         self.credential = PlainTextAuthProvider(username=self.user, password=self.password)
-        self.cluster = Cluster(cluster_ips, port=self.port, auth_provider=self.credential)
+        self.cluster = Cluster(self.ips, port=self.port, auth_provider=self.credential)
         self.session = None
+
     def create_session(self, keyspace=None):
         if not self.session:
-            self.session = self.cluster.connect(keyspace)
+            try:
+                self.session = self.cluster.connect(keyspace)
+                self.session.row_factory = dict_factory
+            except DriverException as e:
+                DEBUG('Failed to connect Cluster:', e)
+                if 'Cluster is already shut down' in e:
+                    self.cluster = Cluster(self.ips, port=self.port, auth_provider=self.credential)
+                    self.create_session(keyspace)
 
     def exec(self, query, size=None, paging_state=None):
+        DEBUG('Send query:', query, size, paging_state)
         statement = SimpleStatement(query, fetch_size=size)
         rows = self.session.execute(statement, paging_state=paging_state)
         return rows
 
     def exec_async(self, query):
-        result = self.session.execute_async()
+        result = self.session.execute_async(query)
         return result
 
 class Remote():
@@ -37,6 +53,7 @@ class Remote():
         self.tunnel = None
 
     def connect(self, service_host, port):
+        DEBUG('Create ssh tunnel:', self.user, self.passwd, self.host, 'bind:', service_host, port)
         self.tunnel = sshtunnel.open_tunnel(
             self.host, ssh_username=self.user, ssh_password=self.passwd,
             remote_bind_address=(service_host, port),
@@ -59,7 +76,7 @@ class Remote():
         return stdout.read().decode()
 
 class Query():
-    def __init__(self, cass_ips, port, user, password):
+    def __init__(self, cass_ips, port, user, password, debug=False):
         self.cass_ips = cass_ips.split(',')
         self.port = int(port)
         self.user = user
@@ -69,6 +86,9 @@ class Query():
         self.ssh = None
         self.paging_state = None
         self.db = None
+        if debug:
+            global trace
+            trace = True
 
     def open(self, host, user, password):
         self.ssh = Remote(host, user, password)
@@ -78,7 +98,8 @@ class Query():
         self.cass_ips = ['127.0.0.1']
 
     def close(self):
-        self.ssh.stop()
+        if ssh:
+            self.ssh.stop()
 
     def query(self, cql):
         self.cql = cql
@@ -113,6 +134,7 @@ def main():
     parser.add_argument('--keyspaces', action='store_true', help='List Cassandra keyspaces')
     parser.add_argument('--tables', action='store_true', help='List All Cassandra keyspaces and tables')
     parser.add_argument('-c', '--continues', action='store_true', help='Display all result without prompt')
+    parser.add_argument('--debug', action='store_true', help='Print debug message')
 
     args = parser.parse_args()
 
@@ -124,7 +146,7 @@ def main():
     port = 9042
     if args.port:
         port = args.port
-    q = Query(args.ip, port, cass_user, cass_passwd)
+    q = Query(args.ip, port, cass_user, cass_passwd, args.debug)
 
     if args.remote_host:
         password = args.remote_password
@@ -164,28 +186,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-def test(port=9042):
-    #cass = CassandraClient(['172.118.23.20'], port=port, user='sdn', password='sdncassandra')
-    cass = CassandraClient(['127.0.0.1'], port=port, user='sdn', password='sdncassandra')
-    cass.create_session()
-    size = 10
-    #rows = cass.select('select * from "ContrailAnalyticsCql".statstablev4')
-    tm = time.time()
-    #query_str = 'SELECT * FROM "ContrailAnalyticsCql".sessionTable WHERE key=191906826 AND key2=1 AND key3=1 AND key4=0 AND (column1) >= (0) AND (column1, column2, column3) <= (65535, 65535, 2147483647) LIMIT 100000000'
-    query_str = 'select * from "ContrailAnalyticsCql".sessiontable'
-    rows = cass.exec(query_str, size=size)
-    print('execute time:', time.time() - tm)
-    #import pdb;pdb.set_trace()
-    while True:
-        print(rows.paging_state)
-        num = 0
-        for row in rows.current_rows:
-            num +=1
-            print(num, row)
-        #for row in rows:
-        #    print(row)
-        if rows.paging_state is None:
-            break;
-        input('----more----')
-        rows = cass.exec('select * from "ContrailAnalyticsCql".sessiontable', size=size, paging_state=rows.paging_state)
