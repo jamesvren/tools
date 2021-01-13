@@ -1,14 +1,21 @@
+<!DOCTYPE html>
 <html>
 <head>
+    {% block js %}{% endblock %}
+    {% block css %}{% endblock %}
+	{% for message in get_flashed_messages() %}
+	    <div class="alert">{{ message }}</div>
+	{% endfor %}
     <title>
         {% if page_title %}
             {{ page_title }}
         {% endif %}
-        {% block js %}{% endblock %}
-        {% block css %}{% endblock %}
     </title>
+    <meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
 <body>
     {% block body %}{% endblock %}
-
+</body>
+</html>

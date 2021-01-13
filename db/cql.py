@@ -39,6 +39,7 @@ class CassandraClient():
         DEBUG('Send query:', query, size, paging_state)
         statement = SimpleStatement(query, fetch_size=size)
         rows = self.session.execute(statement, paging_state=paging_state)
+        DEBUG('Response paging:', rows.paging_state)
         return rows
 
     def exec_async(self, query):
@@ -81,7 +82,7 @@ class Query():
         self.port = int(port)
         self.user = user
         self.password = password
-        self.size = 50
+        self.size = None
         self.cql = None
         self.ssh = None
         self.paging_state = None
@@ -101,24 +102,14 @@ class Query():
         if ssh:
             self.ssh.stop()
 
-    def query(self, cql):
+    def query(self, cql, paging=None):
         self.cql = cql
         if not self.db:
             self.db = CassandraClient(self.cass_ips, self.port, self.user, self.password)
         self.db.create_session()
         tm = time.time()
-        rows = self.db.exec(cql, size=self.size)
-        self.paging_state = rows.paging_state
-        return rows.current_rows, time.time() - tm, self.paging_state
-
-    def query_next(self):
-        if self.paging_state is None:
-            return None, 0, None
-
-        tm = time.time()
-        rows = self.db.exec(self.cql, size=self.size, paging_state=self.paging_state)
-        self.paging_state = rows.paging_state
-        return rows.current_rows, time.time() - tm, self.paging_state
+        rows = self.db.exec(cql, size=self.size, paging_state=paging)
+        return rows.current_rows, time.time() - tm, rows.paging_state
 
 def main():
     parser = argparse.ArgumentParser()
@@ -177,7 +168,7 @@ def main():
                     break
                 if not args.continues:
                     input('----more----')
-                rows, tm, page = q.query_next()
+                rows, tm, page = q.query_next(cql, page)
                 tm_total += tm
         except KeyboardInterrupt as e:
             pass

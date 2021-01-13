@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
+#coding: utf-8
 from flask import Flask, jsonify, make_response
-from flask import render_template
-from flask import request
+from flask import render_template, views
+from flask import request, flash, redirect, url_for
 from cql import Query
+import traceback
 
 class DB():
     q = None
@@ -15,55 +17,121 @@ class DB():
     @classmethod
     def ssh(cls, ip, user, password):
         if not cls.remote_opened:
-            cls.q.open(ip, user, password)
-            cls.remote_opened = True
+            try:
+                cls.q.open(ip, user, password)
+                cls.remote_opened = True
+            except Exception as e:
+                cls.q = None
+                traceback.print_exc()
+                return e.value
 
     @classmethod
     def close_ssh(cls):
-        cls.q.close()
+        if cls.q:
+            cls.q.close()
 
     @classmethod
-    def query(cls, cql):
-        return cls.q.query(cql)
+    def query(cls, cql, page=None):
+        if cls.q:
+            if not page:
+                return cls.q.query(cql)
+            else:
+                return cls.q.query_next(cql, page)
+        else:
+            return None, 0, None #rows, query_time, page_state
 
 app = Flask(__name__, template_folder='view')
+
+# class DBView(views.View):
+#     def dispatch_request(self):
+#         return jsonify('')
+
+# app.add_url_rule('/db', view_func=DBView.as_view('dbview'))
+
+@app.context_processor
+def global_data():
+    rows = []
+    keyspaces = set()
+    tables = []
+    cql = ""
+
+    rows, tm, page = DB.query('SELECT keyspace_name, table_name FROM system_schema.tables')
+    if not rows:
+        rows = []
+    for row in rows:
+        if not row['keyspace_name'].startswith('system'):
+            keyspaces.add(row['keyspace_name'])
+            tables.append(row['table_name'])
+    return dict(query_time=tm, keyspaces=keyspaces, tables=tables, cql=cql)
 
 #@app.route('/', methods=['GET'])
 @app.route('/')
 def main():
     return render_template('login.html', page_title='Cassandra DB')
 
-@app.route('/db', methods=['POST'])
+@app.route('/db', methods=['GET', 'POST'])
 def db():
     rows = []
     keyspaces = set()
     tables = []
-    ip = request.form.get('ip')
-    port = request.form.get('port')
-    user = request.form.get('user')
-    password = request.form.get('password')
-    ssh = request.form.get('ssh')
-    ssh_ip = request.form.get('ssh_ip')
-    ssh_user = request.form.get('ssh_user')
-    ssh_password = request.form.get('ssh_password')
+    if request.method == 'POST':
+        ip = request.form.get('ip')
+        port = request.form.get('port')
+        user = request.form.get('user')
+        password = request.form.get('password')
+        ssh = request.form.get('ssh')
+        ssh_ip = request.form.get('ssh_ip')
+        ssh_user = request.form.get('ssh_user')
+        ssh_password = request.form.get('ssh_password')
 
-    if ip and port and user and password:
-        DB.init(ip, port, user, password)
-        if ssh:
-            DB.ssh(ssh_ip, ssh_user, ssh_password)
-        rows, tm, page = DB.query('SELECT keyspace_name, table_name FROM system_schema.tables')
-        if not rows:
-            rows = []
-        for row in rows:
-            if not row['keyspace_name'].startswith('system'):
-                keyspaces.add(row['keyspace_name'])
-                tables.append(row['table_name'])
+        if ssh and not (ssh_ip and ssh_user and ssh_password):
+            flash('Please input ssh information.')
+            return redirect(url_for('main'))
 
-    return render_template('db.html', query_time=tm, keyspaces=keyspaces, tables=tables, rows=rows)
+        if ip and port and user and password:
+            DB.init(ip, port, user, password)
+            if ssh:
+                ret = DB.ssh(ssh_ip, ssh_user, ssh_password)
+                if ret:
+                    flash('Error: %s' %ret)
+                    return redirect(url_for('main'))
+
+    return render_template('db.html')
+
+@app.route('/db/query', methods=['POST'])
+def query():
+    cql = request.form.get('cql')
+    if not cql:
+        return redirect(url_for('main'))
+    rows, tm, page = DB.query(cql)
+    if not rows:
+        rows = []
+    return render_template('db.html', page=page, cql=cql, query_time=tm, rows=rows)
+
+@app.route('/db/query_next', methods=['POST'])
+def query_next():
+    rows, tm, page = DB.query(None, True)
+    if not rows:
+        rows = []
+    return render_template('db.html', page=page, query_time=tm, rows=rows)
+
+@app.route('/db/edit/<int:key>', methods=['GET', 'POST'])
+def edit(key):
+    row = {}
+    if request.method == 'POST':
+        flash('Item Updated')
+        return redirect(url_for('db'))
+    return render_template('edit.html', row=row)
+
+@app.route('/db/delete/<int:key>', methods=['POST'])
+def delete(key):
+    row = {}
+    return redirect(url_for('db'))
 
 @app.errorhandler(404)
 def not_found(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
 if __name__ == '__main__':
+    app.config['SECRET_KEY'] = 'dev' # 等同于 app.secret_key = 'dev'
     app.run(host="0.0.0.0", port=80, debug=True)

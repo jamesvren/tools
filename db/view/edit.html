@@ -1,0 +1,11 @@
+{% extends 'main.html' %}
+
+{% block body %}
+<h2>Edit row</h2>
+<form method="post">
+	<!-- {% for item in row.items() %}
+	    item.key()<input type="text" name="{{item.value()}}">
+	{% endfor %} -->
+	<input class="btn" type="submit" name="submit" value="Update">
+</form>
+{% endblock %}
