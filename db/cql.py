@@ -82,7 +82,7 @@ class Query():
         self.port = int(port)
         self.user = user
         self.password = password
-        self.size = None
+        self.size = 50
         self.cql = None
         self.ssh = None
         self.paging_state = None

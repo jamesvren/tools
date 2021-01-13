@@ -29,8 +29,6 @@
             <form class="inline-form" method="post" action="{{ url_for('query') }}">
                 Query(CQL): <input type="text" name="cql" value="{{ cql }}">
                 <input class="btn" type="submit" name="query", value="execute" >
-            </form>
-            <form class="inline-form" method="post" action="{{ url_for('query_next') }}">
                 {% if page %}
                     <input class="btn" type="submit" name="next", value="next" >
                 {% endif %}
@@ -38,16 +36,28 @@
         </div>
         <div id="data">
             <p>{{ rows |length }} Rows - time: {{ query_time }}s</p>
-            <ul>
+            <table class='dbdata'>
                 {% for row in rows %}
-                    <li>{{ row }}</li>
-                    <a href="{{ url_for('edit', key=0) }}">Edit</a>
+                <tr>
+                    <tr>
+                        {% for key in list_without_last(row.keys()) %}
+                            <td>{{ key }}</td>
+                        {% endfor %}
+                    </tr>
+                    <tr>
+                        {% for value in list_without_last(row.values()) %}
+                            <td>{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                    <tr><td>value</td><td>row.get('value', '')</td></tr>
+                   <!--  <a href="{{ url_for('edit', key=0) }}">Edit</a>
                     <form class="inline-form" method="post" action="{{ url_for('delete', key=0) }}">
                         <input class="btn" type="submit" name="delete", value="delete"
                         onclick="return confirm('Delete this row?')">
-                    </form>
+                    </form> -->
+                </tr>
                 {% endfor %}             
-            </ul>
+            </table>
     	</div>
     </div>
     <div id="footer"></div>

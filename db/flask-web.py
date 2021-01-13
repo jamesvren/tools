@@ -2,9 +2,10 @@
 #coding: utf-8
 from flask import Flask, jsonify, make_response
 from flask import render_template, views
-from flask import request, flash, redirect, url_for
+from flask import request, session, flash, redirect, url_for
 from cql import Query
 import traceback
+import os
 
 class DB():
     q = None
@@ -33,15 +34,14 @@ class DB():
     @classmethod
     def query(cls, cql, page=None):
         if cls.q:
-            if not page:
-                return cls.q.query(cql)
-            else:
-                return cls.q.query_next(cql, page)
+            return cls.q.query(cql, page)
         else:
             return None, 0, None #rows, query_time, page_state
 
 app = Flask(__name__, template_folder='view')
 
+# app.config['SECRET_KEY'] = os.urandom(24) # 等同于 app.secret_key = os.urandom(24)
+app.config['SECRET_KEY'] = 'dev'
 # class DBView(views.View):
 #     def dispatch_request(self):
 #         return jsonify('')
@@ -63,6 +63,13 @@ def global_data():
             keyspaces.add(row['keyspace_name'])
             tables.append(row['table_name'])
     return dict(query_time=tm, keyspaces=keyspaces, tables=tables, cql=cql)
+
+@app.template_global()
+def list_without_last(li):
+    length = len(li)
+    if length > 0:
+        return li[:length - 1]
+    return li
 
 #@app.route('/', methods=['GET'])
 @app.route('/')
@@ -100,20 +107,18 @@ def db():
 
 @app.route('/db/query', methods=['POST'])
 def query():
+    paging = None
     cql = request.form.get('cql')
     if not cql:
         return redirect(url_for('main'))
-    rows, tm, page = DB.query(cql)
+
+    if request.form.get('next'):
+        paging = session.get('page')
+    rows, tm, page = DB.query(cql, paging)
+    session['page'] = page
     if not rows:
         rows = []
     return render_template('db.html', page=page, cql=cql, query_time=tm, rows=rows)
-
-@app.route('/db/query_next', methods=['POST'])
-def query_next():
-    rows, tm, page = DB.query(None, True)
-    if not rows:
-        rows = []
-    return render_template('db.html', page=page, query_time=tm, rows=rows)
 
 @app.route('/db/edit/<int:key>', methods=['GET', 'POST'])
 def edit(key):
@@ -133,5 +138,4 @@ def not_found(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
 if __name__ == '__main__':
-    app.config['SECRET_KEY'] = 'dev' # 等同于 app.secret_key = 'dev'
     app.run(host="0.0.0.0", port=80, debug=True)
