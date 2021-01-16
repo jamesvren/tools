@@ -1,12 +1,5 @@
 {% extends "main.html" %}
 
-{% block js %}
-    <script src="{{ url_for('static', filename='db.js') }}"></script>
-{% endblock %}
-{% block css %}
-    <link rel="stylesheet" type="text/css" href="/static/style.css">
-{% endblock %}
-
 {% block body %}
     <div id="keyspaces">
         <h1>Keyspaces</h1>
@@ -36,26 +29,27 @@
         </div>
         <div id="data">
             <p>{{ rows |length }} Rows - time: {{ query_time }}s</p>
-            <table class='dbdata'>
+            <table>
                 {% for row in rows %}
-                <tr>
                     <tr>
-                        {% for key in list_without_last(row.keys()) %}
-                            <td>{{ key }}</td>
+                        {% for key in row %}
+                            <th class="{{ key }}">{{ key }}</th>
                         {% endfor %}
                     </tr>
                     <tr>
-                        {% for value in list_without_last(row.values()) %}
-                            <td>{{ value }}</td>
+                        {% for key in row %}
+                            <td>{{ row[key] }}</td>
                         {% endfor %}
                     </tr>
-                    <tr><td>value</td><td>row.get('value', '')</td></tr>
-                   <!--  <a href="{{ url_for('edit', key=0) }}">Edit</a>
-                    <form class="inline-form" method="post" action="{{ url_for('delete', key=0) }}">
-                        <input class="btn" type="submit" name="delete", value="delete"
-                        onclick="return confirm('Delete this row?')">
-                    </form> -->
-                </tr>
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('edit', key=0) }}">Edit</a>
+                            <form class="inline-form" method="post" action="{{ url_for('delete', key=0) }}">
+                                <input class="btn" type="submit" name="delete", value="delete"
+                                onclick="return confirm('Delete this row?')">
+                            </form>
+                        </td>
+                    </tr>
                 {% endfor %}             
             </table>
     	</div>

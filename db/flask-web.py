@@ -6,6 +6,7 @@ from flask import request, session, flash, redirect, url_for
 from cql import Query
 import traceback
 import os
+from datetime import timedelta
 
 class DB():
     q = None
@@ -42,6 +43,7 @@ app = Flask(__name__, template_folder='view')
 
 # app.config['SECRET_KEY'] = os.urandom(24) # 等同于 app.secret_key = os.urandom(24)
 app.config['SECRET_KEY'] = 'dev'
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = timedelta(seconds=1)
 # class DBView(views.View):
 #     def dispatch_request(self):
 #         return jsonify('')
@@ -66,7 +68,7 @@ def global_data():
 
 @app.template_global()
 def list_without_last(li):
-    length = len(li)
+    length = len(list(li))
     if length > 0:
         return li[:length - 1]
     return li

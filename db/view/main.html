@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-    {% block js %}{% endblock %}
-    {% block css %}{% endblock %}
 	{% for message in get_flashed_messages() %}
 	    <div class="alert">{{ message }}</div>
 	{% endfor %}
@@ -11,6 +9,12 @@
             {{ page_title }}
         {% endif %}
     </title>
+    {% block js %}
+	    <script src="{{ url_for('static', filename='db.js') }}"></script>
+    {% endblock %}
+    {% block css %}
+	    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">
+    {% endblock %}
     <meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
