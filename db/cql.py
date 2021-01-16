@@ -8,7 +8,7 @@ from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement, dict_factory
 from cassandra.auth import PlainTextAuthProvider
 
-trace = False
+trace = True
 def DEBUG(*msg):
     if trace:
         print(*msg)
@@ -46,6 +46,10 @@ class CassandraClient():
         result = self.session.execute_async(query)
         return result
 
+    def close(self):
+        DEBUG('Close Cluster:', self.ips, self.port, self.user, self.password)
+        self.cluster.shutdown()
+
 class Remote():
     def __init__(self, host, user, password):
         self.host = host
@@ -67,6 +71,7 @@ class Remote():
         self.tunnel.start()
 
     def stop(self):
+        DEBUG('Close ssh tunnel:', self.user, self.passwd, self.host)
         self.tunnel.stop()
 
     def local_port(self):
@@ -92,15 +97,25 @@ class Query():
             trace = True
 
     def open(self, host, user, password):
-        self.ssh = Remote(host, user, password)
-        self.ssh.connect(self.cass_ips[0], self.port)
-        self.ssh.start()
-        self.port = self.ssh.local_port()
-        self.cass_ips = ['127.0.0.1']
+        if self.ssh:
+            return
+        try:
+            self.ssh = Remote(host, user, password)
+            self.ssh.connect(self.cass_ips[0], self.port)
+            self.ssh.start()
+            self.port = self.ssh.local_port()
+            self.cass_ips = ['127.0.0.1']
+        except Exception as e:
+            self.ssh = None
+            raise e
 
     def close(self):
-        if ssh:
+        if self.db:
+            self.db.close()
+            self.db = None
+        if self.ssh:
             self.ssh.stop()
+            self.ssh = None
 
     def query(self, cql, paging=None):
         self.cql = cql

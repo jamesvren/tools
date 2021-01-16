@@ -10,10 +10,12 @@
 			<p>User: <input type="text" name="user" value="sdn" required /></p>
 			<p>Password: <input type="text" name="password" value="sdncassandra" required /></p>
 
-			<p><input type="checkbox" name="ssh" value="enabled" /><label for="ssh">SSH</label></p>
-			<p>IP: <input type="text" name="ssh_ip" /></p>
-			<p>User: <input type="text" name="ssh_user" value="root" /></p>
-			<p>Password: <input type="text" name="ssh_password" value="cloudadmin" /></p>
+			<p><input type="checkbox" id="ssh" name="ssh" onchange="switchSSH(this.id)" /><label for="ssh">SSH</label></p>
+			<div class="ssh_info" id="ssh_info">
+				<p>IP: <input type="text" name ="ssh_ip" /></p>
+				<p>User: <input type="text" name ="ssh_user" value="root" /></p>
+				<p>Password: <input type="text" name ="ssh_password" value="cloudadmin" /></p>
+			</div>
 			<input type="submit" value="Connect" />
 		</fieldset>
     </form>

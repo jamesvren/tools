@@ -10,7 +10,7 @@
         {% endif %}
     </title>
     {% block js %}
-	    <script src="{{ url_for('static', filename='db.js') }}"></script>
+	    <script  type="text/javascript" src="{{ url_for('static', filename='db.js') }}"></script>
     {% endblock %}
     {% block css %}
 	    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}">

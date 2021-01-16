@@ -10,7 +10,6 @@ from datetime import timedelta
 
 class DB():
     q = None
-    remote_opened = False
     @classmethod
     def init(cls, ip, port, user, password):
         if not cls.q:
@@ -18,19 +17,18 @@ class DB():
 
     @classmethod
     def ssh(cls, ip, user, password):
-        if not cls.remote_opened:
-            try:
-                cls.q.open(ip, user, password)
-                cls.remote_opened = True
-            except Exception as e:
-                cls.q = None
-                traceback.print_exc()
-                return e.value
+        try:
+            cls.q.open(ip, user, password)
+        except Exception as e:
+            cls.q = None
+            traceback.print_exc()
+            return e.value
 
     @classmethod
-    def close_ssh(cls):
+    def close(cls):
         if cls.q:
             cls.q.close()
+            cls.q = None
 
     @classmethod
     def query(cls, cql, page=None):
@@ -57,7 +55,12 @@ def global_data():
     tables = []
     cql = ""
 
-    rows, tm, page = DB.query('SELECT keyspace_name, table_name FROM system_schema.tables')
+    try:
+        rows, tm, page = DB.query('SELECT keyspace_name, table_name FROM system_schema.tables')
+    except Exception as e:
+        flash('Error: %s' %str(e))
+        return dict()
+
     if not rows:
         rows = []
     for row in rows:
@@ -110,6 +113,11 @@ def db():
 @app.route('/db/query', methods=['POST'])
 def query():
     paging = None
+    disconnect = request.form.get('disconnect')
+    if disconnect:
+        DB.close()
+        return redirect(url_for('main'))
+
     cql = request.form.get('cql')
     if not cql:
         return redirect(url_for('main'))
