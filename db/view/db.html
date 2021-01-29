@@ -1,6 +1,7 @@
 {% extends "main.html" %}
 
 {% block body %}
+    <div class="backtop"><a href="javascript:scroll(0,0)">Top</a></div>
     <div class="db">
         <div class="keyspaces">
             <p class="header">Keyspaces</p>
@@ -46,7 +47,7 @@
                             <td>{{ row[key] }}</td>
                         {% endfor %}
                     </tr>
-                    <tr>
+<!--                     <tr>
                         <td>
                             <a href="{{ url_for('edit', key=0) }}">Edit</a>
                             <form class="inline-form" method="post" action="{{ url_for('delete', key=0) }}">
@@ -54,7 +55,7 @@
                                 onclick="return confirm('Delete this row?')">
                             </form>
                         </td>
-                    </tr>
+                    </tr> -->
                 {% endfor %}             
             </table>
     	</div>

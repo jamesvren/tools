@@ -13,6 +13,17 @@ input[type=text], select {
   visibility: inherit
 }
 
+input[type=search], select {
+  width: 100%;
+  padding: 8px 10px;
+  margin: 8px 0;
+  display: inline-block;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  visibility: inherit
+}
+
 input[type=text].cql {
 /*  width: 80%;
   float: right;*/
@@ -52,7 +63,7 @@ input[type=checkbox] {
 input[type="checkbox"]::before {
   content: "";
   position: absolute;
-  top: -3px;
+  top: -2px;
   left: 0;
   background: #fff;
   width: 100%;
@@ -63,7 +74,7 @@ input[type="checkbox"]:checked::before {
   content: "\2713";
   background-color: #fff;
   position: absolute;
-  top: -4;
+  top: -3;
   left: 0;
   width: 100%;
   border: 1px solid #e50232;
@@ -123,14 +134,44 @@ input[type="checkbox"]:checked::before {
 .context {
 }
 
+.backtop {
+	position: fixed;
+	width: 10px;
+	height: 15px;
+	bottom: 5px;
+	float: right;
+}
+
 table {
     border-collapse: collapse;
+    /*table-layout: fixed;*/
+    /*width: 100%;*/
+    /*max-width: 200%;*/
 }
 
 th, td {
-    border-style: solid;
+    border:1px solid #98bf21;
+    /*width: 12em;*/
+}
+
+th {
+	background-color:#A7C942;
+	color:#ffffff;
+}
+
+td {
+	/*vertical-align:top;*/
+	white-space:nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /*width: 12em;*/
+}
+
+td:hover {
+/*    border-style: solid;
     border-width: 1px;
-    border-color: #ccc;
+    border-color: #ccc;*/
+    border:1px solid #98bf21;
     overflow: visible;
 }
 

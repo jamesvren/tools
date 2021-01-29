@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-while getopts ":c:h:r:v:p:dk" opt; do
+while getopts ":c:h:r:v:p:i:dk" opt; do
     case $opt in
       c) container=$OPTARG
          ;;
@@ -13,6 +13,8 @@ while getopts ":c:h:r:v:p:dk" opt; do
          ;;
       p) password=$OPTARG
          ;;
+      i) keyfile=$OPTARG
+         ;;
       d) deleteImage=1
          ;;
       k) upgradeKernel=1
@@ -23,9 +25,10 @@ done
 shift $((OPTIND-1))
 
 if [[ -z $newVersion ]]; then
-  echo "Usage: $0 [-h <node1,node2,...> ] [ -p <password> ] [ -d ] [-k ] [-r <reigstry>] -v <tag>"
+  echo "Usage: $0 [-h <node1,node2,...> ] [ -p <password> ] [ -i <private key> ] [ -d ] [-k ] [-r <reigstry>] -v <tag>"
   echo "  -h: host name, default current node if not set"
   echo "  -p: password for all hosts, prompt input if not set"
+  echo "  -i: ssh private key for login"
   echo "  -r: like as 10.130.176.11:6666 or 10.192.13.66/dev"
   echo "  -d: delete image"
   echo "  -k: update kernel by ifdown vhost0"
@@ -44,6 +47,10 @@ IFS="$OLD_IFS"
 ssh_cmd="ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 if [[ "x${password}" != "x" ]]; then
   ssh_cmd="sshpass -p ${password} $ssh_cmd"
+fi
+
+if [[ "x${keyfile}" != "x" ]]; then
+  ssh_cmd="$ssh_cmd -i $keyfile"
 fi
 
 image_cmd="docker ps --format={{.Image}} -f name=${container} | grep contrail | sed -n '1p'"
