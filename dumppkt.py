@@ -67,9 +67,11 @@ class Capture(object):
         print('    %r' % packet)
 
     def dump_one(self, packet):
-        fmt = '{Ether:%Ether.src%=>%Ether.dst%, %type%:} {IP:%-15s,IP.src% -> %-15s,IP.dst%, %IP.proto%, frag=%IP.frag%, len=%IP.len%, ttl=%IP.ttl%}'
-        print('%s: %s' % (datetime.fromtimestamp(packet.time).strftime('%H:%M:%S.%f'), packet.sprintf(fmt)))
-        print('    %s' % packet.summary())
+        fmt = '{Ether:%Ether.src%=>%Ether.dst% | %type%:} {IP:%-15s,IP.src% -> %-15s,IP.dst% %IP.proto%, frag=%IP.frag%, len=%IP.len%, ttl=%IP.ttl%}'
+        info = packet.sprintf(fmt)
+        print('%s: %s' % (datetime.fromtimestamp(packet.time).strftime('%H:%M:%S.%f'), info))
+        info = packet.summary()
+        print('    %s' % info)
         mplspkt = packet.getlayer(MPLS)
         if mplspkt:
             info = '    Lable: %s' % mplspkt.label
@@ -94,7 +96,7 @@ class Capture(object):
             self.dump_one(packet)
         if self.hex:
             hexdump(packet)
-        print('\n')
+        print('')
 
 if __name__ == '__main__':
     main()
