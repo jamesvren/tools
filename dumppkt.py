@@ -15,6 +15,7 @@ def main():
     parser.add_argument('--mac', nargs='*', help='Filter by inner mac address')
     parser.add_argument('--ip', nargs='*', help='Filter by inner ip address')
     parser.add_argument('-e', '--hex', action='store_true', help='Dump hex string')
+    parser.add_argument('--vni', nargs='*', help='Filter by inner vni')
     parser.set_defaults(func=cmd_parser)
     args = parser.parse_args()
     args.func(args)
@@ -23,11 +24,13 @@ def cmd_parser(args):
     #print(args)
     cap = Capture()
     if args.mpls:
-        cap.filters['label'] = args.mpls
+        cap.filters['label'] = [int(mpls) for mpls in args.mpls]
     if args.mac:
         cap.filters['mac'] = args.mac
     if args.ip:
         cap.filters['ip'] = args.ip
+    if args.vni:
+        cap.filters['vni'] = [int(vni) for vni in args.vni]
     cap.all = args.all
     cap.hex = args.hex
     cap.capture(args.iface, args.filter)
@@ -48,9 +51,10 @@ class Capture(object):
         labels = self.filters.get('label')
         macs = self.filters.get('mac')
         ips = self.filters.get('ip')
+        vnis = self.filters.get('vni')
         mplspkt = packet.getlayer(MPLS)
         if mplspkt:
-            if labels and str(mplspkt.label) in labels:
+            if labels and mplspkt.label in labels:
                 return True 
             inner_eth = mplspkt.getlayer(Ether)
             if inner_eth and macs and (str(inner_eth.src) in macs or str(inner_eth.dst) in macs):
@@ -58,7 +62,12 @@ class Capture(object):
             inner_ip = mplspkt.getlayer(IP)
             if inner_ip and ips and (str(inner_ip.src) in ips or str(inner_ip.dst) in ips):
                 return True
-        if not labels and not macs and not ips:
+        vxlan = packet.getlayer(VXLAN)
+        if vxlan:
+            if vnis and vxlan.vni in vnis:
+                return True
+
+        if not self.filters:
             return True
         return False
 
