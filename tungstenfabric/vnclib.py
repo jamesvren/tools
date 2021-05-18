@@ -3,13 +3,13 @@
 from vnc_api import vnc_api
 
 class Api(vnc_api.VncApi):
-    def __init__(self, server):
+    def __init__(self, server, port=6000):
         self.user = 'ArcherAdmin'
         self.pwd = 'ArcherAdmin@123'
         self.tenant = self.user
         self.port = '8082'
         self.server = server
-        self.auth_port = '6000'
+        self.auth_port = str(port)
 
         super(Api, self).__init__(username=self.user, password=self.pwd, tenant_name=self.tenant,
                                    api_server_host=self.server, api_server_port=self.port,
