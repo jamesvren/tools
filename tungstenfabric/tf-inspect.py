@@ -1,4 +1,5 @@
-#! /usr/bin/env python
+#! /usr/bin/env python2
+# encoding=utf8
 
 # Author        : Yan Chen <vcheny@outlook.com>
 # Platform      : Contrail 3.2+
@@ -10,7 +11,11 @@ version = '1.1'
 # components e.g. control, config and comptue(vrouter) nodes and makes output
 # CLI friendly.
 
-import sys, os
+import sys
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+import os
 import argparse
 import socket, struct
 from urllib2 import urlopen, URLError, HTTPError

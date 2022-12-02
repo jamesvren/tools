@@ -28,7 +28,6 @@ class CassandraClient():
         if not self.session:
             try:
                 self.session = self.cluster.connect(keyspace)
-                import pdb;pdb.set_trace()
                 self.session.row_factory = dict_factory
             except DriverException as e:
                 DEBUG('Failed to connect Cluster:', e)

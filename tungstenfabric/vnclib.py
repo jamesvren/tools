@@ -1,8 +1,8 @@
 # wrapper for API client
 # please install contrail-api-client with python2
-from vnc_api import vnc_api
+from vnc_api.vnc_api import *
 
-class Api(vnc_api.VncApi):
+class Api(VncApi):
     def __init__(self, server, port=6000):
         self.user = 'ArcherAdmin'
         self.pwd = 'ArcherAdmin@123'
