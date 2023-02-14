@@ -1,11 +1,18 @@
+#!/bin/bash
+
 op=$1
 
 if [[ "x$op" == "x" || "$op" == "-h" ]]; then
-    echo -e "Usage: modify vhost0 ip or nic, also support remove a vrouter\n\t $0 nic ens3f0\n\t $0 ip 192.168.10.10 192.168.10.1\n\t $0 remove"
+    echo "Usage: modify vhost0 ip or nic, also support remove a vrouter"
+    echo -e "\t $0 nic ens3f0"
+    echo -e "\t $0 ips <oldip1>:<newip1> <oldip2>:<newip2> <oldip3>:<newip3> <gateway-ip>"
+    echo -e "\t    e.g. $0 ips 172.118.10.10:192.168.10.10 172.118.10.13:192.168.10.13 172.118.10.16:192.168.10.16 192.168.10.1"
+    echo -e "\t [$0 ip <newip> <gateway-ip> -- Used only if controller IP not changed]"
+    echo -e "\t $0 remove"
     exit 0
 fi
 
-env_file=$(find /etc -name common_vrouter.env)
+vrouter_env_file=$(find /etc -name common_vrouter.env)
 compose_file=$(find /etc -name docker-compose.yaml | grep vrouter)
 
 # ***********************************************************************
@@ -28,13 +35,13 @@ if [ "$op" == "nic" ]; then
     ifdown vhost0
 
     echo ""
-    old_nic=$(grep PHYSICAL_INTERFACE $env_file | awk -F '=' '{print $2}')
+    old_nic=$(grep PHYSICAL_INTERFACE $vrouter_env_file | awk -F '=' '{print $2}')
     echo "==> Step 2: Replace $old_nic with $nic"
-    sed -i "s/PHYSICAL_INTERFACE=.*/PHYSICAL_INTERFACE=$nic/g" $env_file
+    sed -i "s/PHYSICAL_INTERFACE=.*/PHYSICAL_INTERFACE=$nic/g" $vrouter_env_file
     ifdown $old_nic
     # comment IP address in old nic
-    sed -i "s/IPADDR=/#IPADDR=/g" /etc/sysconfig/network-scripts/ifcfg-$old_nic
-    sed -i "s/PREFIX=/#PREFIX=/g" /etc/sysconfig/network-scripts/ifcfg-$old_nic
+    sed -i "s/^IPADDR=/#IPADDR=/g" /etc/sysconfig/network-scripts/ifcfg-$old_nic
+    sed -i "s/^PREFIX=/#PREFIX=/g" /etc/sysconfig/network-scripts/ifcfg-$old_nic
 
     # make sure new nic have IP address assigned
     echo $nic | grep '\.'
@@ -105,36 +112,139 @@ if [ "$op" == "remove" ]; then
 fi
 
 # Replace IP address for vhost0
-if [ "$op" == "ip" ]; then
-    IP=$2
-    if [ "x$IP" == "x" ]; then
+function get_controls() {
+    ips="$1 $2 $3"
+    PYCMD=$(cat <<EOF
+ips = "$ips".split()
+controls = ''
+for ip in ips:
+  controls += ip.split(':')[1] + ','
+print(controls.strip(','))
+EOF
+)
+    python -c "$PYCMD"
+}
+
+function get_my_newip() {
+    ips="$1 $2 $3"
+    PYCMD=$(cat <<EOF
+ips = "$ips".split()
+for ip in ips:
+  node = ip.split(':')
+  if node[0] == "$4":
+    print(node[1])
+    break
+EOF
+)
+    python -c "$PYCMD"
+}
+
+function reg_node() {
+    node=$1
+    PYCMD=$(cat <<EOF
+ips = "$node".split(':')
+print('s/%s/%s/g' %(ips[0], ips[1]))
+EOF
+)
+    python -c "$PYCMD"
+}
+
+if [ "$op" == "ips" ]; then
+    node1=$2
+    node2=$3
+    node3=$4
+    if [[ "x$node1" == "x" || "x$node2" == "x" || "x$node3" == "x" ]]; then
         echo "error: IP address not set"
         exit 1
     fi
-    gateway=$3
+    gateway=$5
     if [ "x$gateway" == "x" ]; then
         echo "error: gateway address not set"
         exit 1
     fi
     old_ip=$(ip -4 -br a s vhost0 | awk '{print $3}' | awk -F '/' '{print $1}')
-    nic=$(grep PHYSICAL_INTERFACE $env_file | awk -F '=' '{print $2}')
+    nic=$(grep PHYSICAL_INTERFACE $vrouter_env_file | awk -F '=' '{print $2}')
 
-    echo "==> Step 1: unregist vrouter agent"
-    remove_vrouter
-    docker-compose -f $compose_file down
+    controls=$(get_controls $node1 $node2 $node3)
+    IP=$(get_my_newip $node1 $node2 $node3 $old_ip)
+    echo "new controller is $controls, my old ip is $old_ip, my new ip is $IP and vrouter gateway $gateway"
+    read -p "### Is this correct?(y/n)" confirmed
+    if [[ $confirmed != "y" ]]; then
+      exit 0
+    fi
 
     echo ""
-    echo "==> Step 2: modify environment variable"
-    sed -i "s/VROUTER_GATEWAY=.*/VROUTER_GATEWAY=$gateway/g" $env_file
+    echo "==> Step 1: modify environment variable"
+    echo "    | modify /etc/hosts"
+    echo "    <<<<<< old /etc/hosts"
+    cat /etc/hosts | grep cluster
+    for node in $node1 $node2 $node3; do
+        reg=$(reg_node $node)
+        sed -i.bak "$reg" /etc/hosts
+    done
+    echo "    >>>>>> new /etc/hosts"
+    cat /etc/hosts | grep cluster
+    read -p "### Is this correct?(y/n)" confirmed
+    if [[ $confirmed != "y" ]]; then
+      exit 0
+    fi
+
+    echo "    | modify gateway and control nodes for vrouter"
+    sed -i "s/VROUTER_GATEWAY=.*/VROUTER_GATEWAY=$gateway/g" $vrouter_env_file
+    sed -i "s/CONTROL_NODES=.*/CONTROL_NODES=$controls/g" $vrouter_env_file
+    echo "    | modify gateway and control nodes for control"
+    control_env_file=$(find /etc -name common_control.env)
+    sed -i "s/VROUTER_GATEWAY=.*/VROUTER_GATEWAY=$gateway/g" $control_env_file
+    sed -i "s/CONTROL_NODES=.*/CONTROL_NODES=$controls/g" $control_env_file
+    web_env_file=$(find /etc -name common_web.env)
+    echo "    | modify gateway and control nodes for web"
+    sed -i "s/VROUTER_GATEWAY=.*/VROUTER_GATEWAY=$gateway/g" $web_env_file
+    sed -i "s/CONTROL_NODES=.*/CONTROL_NODES=$controls/g" $web_env_file
+
+    echo ""
+    echo "==> Step 2: replace $old_ip with $IP"
+    echo "    | for vrouter nodes"
+    echo "** Please do this in SDN GUI manually. In Configure->Infrastructure->Nodes->Virtual Routers"
+    echo "    | for control nodes"
+    echo "** Please do this in SDN GUI manually. In Configure->Infrastructure->BGP Routers"
+    read -p "### Done?(y/n)" confirmed
+    if [[ $confirmed != "y" ]]; then
+      exit 0
+    fi
 
     echo ""
     echo "==> Step 3: replace $old_ip with $IP for physical nic"
+    docker-compose -f $compose_file down
+    ifdown vhost0
+    rm -f /etc/sysconfig/network-scripts/*vhost0
     ifdown $nic
     sed -i "s/$old_ip/$IP/g" /etc/sysconfig/network-scripts/ifcfg-$nic
     ifup $nic
 
     echo ""
-    echo "==> Step 4: run with new IP"
+    echo "==> Step 4: rebuild vrouter with new IP"
     docker-compose -f $compose_file up -d
+    echo "==> Step 5: rebuild controller with new IP"
+    compose_file=$(find /etc -name docker-compose.yaml | grep control)
+    docker-compose -f $compose_file down
+    docker-compose -f $compose_file up -d
+    compose_file=$(find /etc -name docker-compose.yaml | grep dns)
+    if [ -f $compose_file ]; then
+        docker-compose -f $compose_file down
+        docker-compose -f $compose_file up -d
+    fi
+    echo "==> Step 6: rebuild web with new IP"
+    compose_file=$(find /etc -name docker-compose.yaml | grep web)
+    docker-compose -f $compose_file down
+    docker-compose -f $compose_file up -d
+
+    echo ""
+    echo "*** Check vrouter status"
+    docker ps -f name=vrouter
+    echo "*** Check control status"
+    docker ps -f name=control
+    echo "*** Check all status"
+    sdn-status
+
     exit 0
 fi

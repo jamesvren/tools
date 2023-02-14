@@ -7,6 +7,7 @@ from cassandra import ConsistencyLevel, DriverException
 from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement, dict_factory
 from cassandra.auth import PlainTextAuthProvider
+from cassandra.concurrent import execute_concurrent_with_args
 
 trace = True
 def DEBUG(*msg):
@@ -82,7 +83,7 @@ class Remote():
         return stdout.read().decode()
 
 class Query():
-    def __init__(self, cass_ips, port, user, password, debug=False):
+    def __init__(self, cass_ips, port, user, password, debug=None):
         self.cass_ips = cass_ips.split(',')
         self.port = int(port)
         self.user = user
@@ -92,9 +93,9 @@ class Query():
         self.ssh = None
         self.paging_state = None
         self.db = None
-        if debug:
+        if debug is not None:
             global trace
-            trace = True
+            trace = debug
 
     def open(self, host, user, password):
         if self.ssh:
@@ -117,13 +118,27 @@ class Query():
             self.ssh.stop()
             self.ssh = None
 
-    def query(self, cql, paging=None):
+    def query(self, cql, paging=None, sync=True):
         self.cql = cql
         if not self.db:
             self.db = CassandraClient(self.cass_ips, self.port, self.user, self.password)
         self.db.create_session()
         tm = time.time()
-        rows = self.db.exec(cql, size=self.size, paging_state=paging)
+        if sync:
+            rows = self.db.exec(cql, size=self.size, paging_state=paging)
+        else:
+            rows = self.db.exec_async(cql)
+        return rows.current_rows, time.time() - tm, rows.paging_state
+
+    def query_concurrent(self, statement, params, num=50):
+        self.cql = SimpleStatement(statement)
+        DEBUG('Send query:', self.cql, params)
+        if not self.db:
+            self.db = CassandraClient(self.cass_ips, self.port, self.user, self.password)
+        self.db.create_session()
+        tm = time.time()
+        self.cql = self.db.session.prepare(statement)
+        rows = execute_concurrent_with_args(self.db.session, self.cql, params, concurrency=num)
         return rows.current_rows, time.time() - tm, rows.paging_state
 
 def main():

@@ -63,14 +63,15 @@ for node in ${nodeArray[*]}
 do
   echo "### Information in node: ${node}"
   compose_file=$($ssh_cmd root@$node find /etc/ -name docker-compose.yaml | head -1)
-  tag=$($ssh_cmd root@$node grep -E ' image' $compose_file | grep -oE 'R.*-(x86_64|aarch64)' | head -1)
+  tag=$($ssh_cmd root@$node grep -E ' image' $compose_file | grep -oE '/.*:.*-(x86_64|aarch64)' | awk -F: '{print $2}' | head -1)
   reg=$($ssh_cmd root@$node grep -E ' image' $compose_file | awk -F\" '{print $2}' | head -1)
+  echo "current tag: $tag"
   echo $reg
 done
 echo ""
 read -p "### Your input [Replace Registry:${newRegistry}, Tag:${newVersion}], confirm(y/n)?" confirmed
 if [[ $confirmed != "y" ]]; then
-  exit
+  exit 0
 fi
 
 # ssh to each node and upgrade the containers
@@ -82,7 +83,7 @@ do
 # 10.192.13.66/dev/contrail-vrouter-agent:james
 
 compose_file=\$(find /etc/ -name docker-compose.yaml | head -1)
-oldVersion=\$(grep -E ' image' \$compose_file | grep -oE 'R.*-(x86_64|aarch64)' | head -1)
+oldVersion=\$(grep -E ' image' \$compose_file | grep -oE '/.*:.*-(x86_64|aarch64)' | awk -F: '{print \$2}' | head -1)
 
 if [[ "x${newRegistry}" != "x" ]]; then
   #echo '{"insecure-registries": ["${newRegistry}"]}' > /etc/docker/daemon.json
@@ -91,7 +92,7 @@ if [[ "x${newRegistry}" != "x" ]]; then
   find /etc -name docker-compose.yaml | xargs -i sed -i -e "s#${newRegistry}#g" {}
 fi
 
-echo "  Replace \${oldVersion} with \${newVersion} ..."
+echo "  Replace \${oldVersion} with ${newVersion} ..."
 find /etc -name docker-compose.yaml | xargs -i sed -i -e "s%\${oldVersion}%${newVersion}%g" {}
 
 if [[ "x${pullImage}" != "x" ]]; then
@@ -100,13 +101,13 @@ if [[ "x${pullImage}" != "x" ]]; then
 fi
 
 if [[ "x${upgradeName}" != "x" ]]; then
-  if [[ -d "/etc/contrail/analytics_database/" ]];
+  if [[ -d "/etc/contrail/analytics_database/" ]]; then
     echo "  Modify name to SDN (Analytics Database) ..."
     docker-compose -f /etc/contrail/analytics_database/docker-compose.yaml exec cassandra ./cassandra_change_cluster_name.sh sdn_analytics
   fi
-  if [[ -d "/etc/contrail/config_database/" ]];
+  if [[ -d "/etc/contrail/config_database/" ]]; then
     echo "  Modify name to SDN (Config Database) ..."
-    docker-compose -f /etc/contrail/config_database/docker-compose.yaml exec cassandra ./cassandra_change_cluster_name.sh sdn_analytics
+    docker-compose -f /etc/contrail/config_database/docker-compose.yaml exec cassandra ./cassandra_change_cluster_name.sh sdn_config
   fi
 fi
 
@@ -139,8 +140,8 @@ fi
 echo "  Starting new SDN container ..."
 find /etc -name docker-compose.yaml | xargs -i docker-compose -f {} up -d
 if [[ -d "/etc/neutron" ]]; then
-echo "  Restart neutron server ..."
-systemctl restart neutron-server.service
+  echo "  Restart neutron server ..."
+  systemctl restart neutron-server.service
 fi
 exit
 REMOTESSH
@@ -150,5 +151,5 @@ echo -e "\n"
 for node in ${nodeArray[*]}
 do
   echo "========Upgrade Done. Check Services Status for $node========"
-  $ssh_cmd $node "arsdn-status"
+  $ssh_cmd $node "sdn-status"
 done
