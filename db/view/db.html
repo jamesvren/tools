@@ -3,22 +3,17 @@
 {% block body %}
     <div class="backtop"><a href="javascript:scroll(0,0)">Top</a></div>
     <div class="db">
-        <div class="keyspaces">
-            <p class="header">Keyspaces</p>
-            <select name="keyspaces" size="{{ keyspaces | length }}">
-                {% for keyspace in keyspaces %}
-                    <option value="{{ keyspace }}">{{ keyspace }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="tables">
-            <p class="header">Tables</p>
-            <select name="tables" size="{{ tables | length }}">
-                {% for table in tables %}
-                    <option value="{{ table }}">{{ table }}</option>
-                {% endfor %}
-            </select>
-        </div>
+        <ul id="keyspaces" class="keyspaces">
+            {% for keyspace in keyspaces.keys() %}
+                <li><span class="caret">{{ keyspace }}</span>
+                    <ul class="nested">
+                    {% for table in keyspaces[keyspace] %}
+                        <li>{{ table }}</li>
+                    {% endfor %}
+                    </ul>
+                </li>
+            {% endfor %}
+        </ul>
         <form class="inline-form" method="post" action="{{ url_for('query') }}">
                 <input class="disconnect" type="submit" name="disconnect", value="Disconnect" >
         </form>
@@ -26,7 +21,8 @@
     <div class="context">
         <div id="query">
             <form class="inline-form" method="post" action="{{ url_for('query') }}">
-                Query(CQL): <input class="cql", type="search" name="cql" value="{{ cql }}">
+                Query(<a href="https://docs.datastax.com/en/cql-oss/3.3/" target="_blank">CQL</a>):
+                <input class="cql", type="search" name="cql" value="{{ cql }}">
                 <input class="cql" type="submit" name="query", value="execute" >
                 {% if page %}
                     <input class="cql" type="submit" name="next", value="next" >
@@ -61,4 +57,9 @@
     	</div>
     </div>
     <div class="footer"></div>
+
+{% block js %}
+    {{ super() }}
+{% endblock %}
+
 {% endblock %}

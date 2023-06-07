@@ -1,13 +1,16 @@
 #!/usr/bin/python3
+from paramiko import SSHClient, AutoAddPolicy
 import sshtunnel
 import time
 import argparse
+from pprint import pprint
 
-from cassandra import ConsistencyLevel, DriverException
+from cassandra import ConsistencyLevel, DriverException, InvalidRequest
 from cassandra.cluster import Cluster, BatchStatement
 from cassandra.query import SimpleStatement, dict_factory
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.concurrent import execute_concurrent_with_args
+from cassandra.protocol import SyntaxException
 
 trace = True
 def DEBUG(*msg):
@@ -57,6 +60,7 @@ class Remote():
         self.user = user
         self.passwd = password
         self.tunnel = None
+        self.ssh = None
 
     def connect(self, service_host, port):
         DEBUG('Create ssh tunnel:', self.user, self.passwd, self.host, 'bind:', service_host, port)
@@ -79,8 +83,14 @@ class Remote():
         return self.tunnel.local_bind_port
 
     def cmd(self, cmd_str):
-        stdin, stdout, stderr = ssh.exec_command(cmd_str)
-        return stdout.read().decode()
+        with SSHClient() as ssh:
+            ssh.load_system_host_keys()
+            ssh.set_missing_host_key_policy(AutoAddPolicy())
+            ssh.connect(self.host)
+            stdin, stdout, stderr = ssh.exec_command(cmd_str)
+            out = stdout.read().decode()
+            err = stderr.read().decode()
+        return out, err
 
 class Query():
     def __init__(self, cass_ips, port, user, password, debug=None):
@@ -102,6 +112,9 @@ class Query():
             return
         try:
             self.ssh = Remote(host, user, password)
+            # ssh to host to get cassandra IP
+            self.detect_db_ip()
+            # setup ssh tunnel
             self.ssh.connect(self.cass_ips[0], self.port)
             self.ssh.start()
             self.port = self.ssh.local_port()
@@ -118,17 +131,23 @@ class Query():
             self.ssh.stop()
             self.ssh = None
 
-    def query(self, cql, paging=None, sync=True):
+    def query(self, cql, paging=None, limit=None, sync=True):
         self.cql = cql
         if not self.db:
             self.db = CassandraClient(self.cass_ips, self.port, self.user, self.password)
         self.db.create_session()
         tm = time.time()
-        if sync:
-            rows = self.db.exec(cql, size=self.size, paging_state=paging)
-        else:
-            rows = self.db.exec_async(cql)
-        return rows.current_rows, time.time() - tm, rows.paging_state
+        if limit is None:
+            limit = self.size
+        try:
+            if sync:
+                rows = self.db.exec(cql, size=limit, paging_state=paging)
+            else:
+                rows = self.db.exec_async(cql)
+        except (InvalidRequest, SyntaxException) as e:
+            print(e)
+            return e, None, 0, None
+        return 'ok', rows.current_rows, time.time() - tm, rows.paging_state
 
     def query_concurrent(self, statement, params, num=50):
         self.cql = SimpleStatement(statement)
@@ -141,15 +160,22 @@ class Query():
         rows = execute_concurrent_with_args(self.db.session, self.cql, params, concurrency=num)
         return rows.current_rows, time.time() - tm, rows.paging_state
 
+    def detect_db_ip(self):
+        ip, _ = self.ssh.cmd("ss -4ntl | grep :9042 | awk '{print $4}'")
+        if ip:
+           self.cass_ips = []
+           self.cass_ips.append(ip.split(':')[0])
+        DEBUG('Cassandra IP is', self.cass_ips)
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--remote-host', help='SSH to remote host')
+    parser.add_argument('-r', '--remote', action='store_true', help='SSH to remote host')
     parser.add_argument('-u', '--remote-user', help='SSH user')
     parser.add_argument('-p', '--remote-password', help='SSH Password')
 
-    parser.add_argument('--ip', required=True, help='Cassandra Listen IP')
-    parser.add_argument('--port', help='Cassandra Listen Port')
-    parser.add_argument('--user', help='Cassandra User ')
+    parser.add_argument('--ip', required=True, help='Cassandra Listen IP or Remote Host IP')
+    parser.add_argument('--port', help='Cassandra Listen Port, default 9042')
+    parser.add_argument('--user', help='Cassandra User')
     parser.add_argument('--passwd', help='Cassandra Password')
     parser.add_argument('--cql', help='Cassandra Query String')
     parser.add_argument('--keyspaces', action='store_true', help='List Cassandra keyspaces')
@@ -169,40 +195,80 @@ def main():
         port = args.port
     q = Query(args.ip, port, cass_user, cass_passwd, args.debug)
 
-    if args.remote_host:
+    if args.remote:
         password = args.remote_password
         if not password:
             password = input('Password: ')
         user = 'root'
         if args.remote_user:
             user = args.remote_user
-        q.open(args.remote_host, user, password)
+        q.open(args.ip, user, password)
+
+    def tables(table=None):
+        if table:
+            return 'SELECT * FROM system_schema.tables WHERE table_name = %s' % table
+        return 'SELECT keyspace_name, table_name FROM system_schema.tables'
+    def keyspaces(keyspace=None):
+        if keyspace:
+            return 'SELECT * FROM system_schema.keyspaces WHERE keyspace_name = %s' % keyspace
+        return 'SELECT * FROM system_schema.keyspaces'
 
     cql = args.cql
     if args.keyspaces:
-        cql = 'SELECT * FROM system_schema.keyspaces'
+        cql = keyspaces()
     if args.tables:
-        cql = 'SELECT keyspace_name, table_name FROM system_schema.tables'
+        cql = tables()
 
-    if cql:
+    def execute_cql(cql, ignore_sys=False):
         tm_total = 0
         try:
-            rows, tm, page = q.query(cql)
+            _, rows, tm, page = q.query(cql)
             tm_total += tm
             while rows:
                 num = 0
                 for row in rows:
                     num +=1
-                    print(num, row)
+                    if ignore_sys and row['keyspace_name'].startswith('system'):
+                        continue
+                    print(num)
+                    pprint(row)
                 if not page:
                     break
                 if not args.continues:
                     input('----more----')
-                rows, tm, page = q.query_next(cql, page)
+                _, rows, tm, page = q.query(cql, page)
                 tm_total += tm
         except KeyboardInterrupt as e:
             pass
-        print('\nTotal Time:', tm_total)
+        return tm_total
+    if cql:
+        tm = execute_cql(cql)
+        print('\nTotal Time:', tm)
+    else:
+        cql = input('cql> ')
+        while cql != 'quit' and cql != 'exit':
+            if cql:
+                ignore_sys = False
+                if cql.startswith('desc'):
+                    cmd = cql.split()
+                    if cmd[1] == 'tables':
+                        cql = tables()
+                        ignore_sys = True
+                    elif cmd[1] == 'keyspaces':
+                        cql = keyspaces()
+                        ignore_sys = True
+                    elif cmd[1] == 'table':
+                        if len(cmd) < 3:
+                            print('Error: Missing table name')
+                        else:
+                            cql = tables(cmd[2])
+                    elif cmd[1] == 'keyspace':
+                        if len(cmd) < 3:
+                            print('Error: Missing table name')
+                        else:
+                            cql = keyspaces(cmd[2])
+                execute_cql(cql, ignore_sys)
+            cql = input('cql> ')
     q.close()
 
 if __name__ == '__main__':
